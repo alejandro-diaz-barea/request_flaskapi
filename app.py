@@ -3,6 +3,99 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBear
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Union
 from pydantic import BaseModel
+import jwt  # PyJWT library
+from datetime import datetime, timedelta
+
+# Inicializa FastAPI
+app = FastAPI(debug=True)
+
+origins = [
+    "https://deploy-reactfront.onrender.com",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+#    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
+# Usuarios predefinidos (email: password)
+usuarios = {"a@gmail.com": "12345678"}
+
+# Secret Key para firmar tokens
+SECRET_KEY = "ODNn6HmZXiH0yS"
+ALGORITHM = "HS256"
+
+# Configura OAuth2 para manejar el envío del token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
+
+# Modelos de datos
+class Item(BaseModel):
+    item: Union[str, int]
+
+class ReplaceData(BaseModel):
+    new_data: List[Union[str, int]]
+
+class UpdateItem(BaseModel):
+    index: int
+    new_value: Union[str, int]
+
+# Función para generar el token JWT
+def generate_token(user: str):
+    expiration = datetime.utcnow() + timedelta(hours=2)  # Token expira en 2 horas
+    payload = {"sub": user, "exp": expiration}
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return token
+
+# Función para validar el token JWT
+def validate_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+# Dependencia para validar el token en cada endpoint protegido
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    return validate_token(token)
+
+@app.options("/login")
+async def options_login():
+    return JSONResponse(
+        content={"message": "Preflight request successful"},
+        headers={
+            "Access-Control-Allow-Origin": "https://deploy-react-front-g4.vercel.app",  # Cambia esto según el origen exacto
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
+    
+# Login (genera un JWT)
+@app.post("/login")
+async def login(credentials: HTTPBasicCredentials = Depends(HTTPBasic())):
+    user = credentials.username
+    password = credentials.password
+
+    # Verificar credenciales
+    if user not in usuarios or usuarios[user] != password:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Generar token
+    token = generate_token(user)
+    return {"access_token": token, "token_type": "bearer"}
+
+from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.security import HTTPBasic, HTTPBasicCredentials, OAuth2PasswordBearer
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Union
+from pydantic import BaseModel
 import jwt
 from datetime import datetime, timedelta
 
