@@ -104,7 +104,7 @@ app = FastAPI(debug=True)
 
 # Configurar CORS
 origins = [
-    "http://localhost:5173",
+    "https://deploy-reactfront.onrender.com",
 ]
 
 app.add_middleware(
